@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>OnWork · Banco de provisión</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --bg:#0f1110; --card:#181b19; --line:#2a2f2c; --txt:#e8ece9; --mut:#8c958f; --lime:#b6e61e; --red:#ff6b6b; --amber:#f5b942; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--txt); }
+  header { display:flex; align-items:center; gap:12px; padding:14px 22px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  header h1 { font-size:17px; margin:0; } header h1 b { color:var(--lime); }
+  .sp { flex:1; }
+  main { display:grid; grid-template-columns: 1fr 380px; gap:18px; padding:18px 22px; }
+  @media (max-width:1100px){ main { grid-template-columns:1fr; } }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:18px; }
+  .card h2 { font-size:13px; margin:0 0 10px; text-transform:uppercase; letter-spacing:.05em; color:var(--mut); }
+  input, select, textarea { background:#0c0e0d; color:var(--txt); border:1px solid var(--line); border-radius:6px; padding:6px 8px; font:inherit; }
+  textarea { width:100%; font-family:ui-monospace,Consolas,monospace; font-size:12.5px; }
+  button { background:#232825; color:var(--txt); border:1px solid var(--line); border-radius:6px; padding:6px 11px; cursor:pointer; font:inherit; }
+  button.pri { background:var(--lime); color:#111; border-color:var(--lime); font-weight:600; }
+  button.danger { color:var(--red); }
+  button:hover { filter:brightness(1.15); }
+  table { width:100%; border-collapse:collapse; }
+  th, td { text-align:left; padding:5px 5px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  th { color:var(--mut); font-weight:500; font-size:12px; }
+  td input, td select { width:100%; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .grow { flex:1; }
+  .pill { padding:2px 8px; border-radius:20px; font-size:12px; border:1px solid var(--line); white-space:nowrap; display:inline-block; }
+  .pill.ok { color:var(--lime); border-color:var(--lime); } .pill.warn { color:var(--amber); border-color:var(--amber); } .pill.bad { color:var(--red); border-color:var(--red); }
+  .mut { color:var(--mut); font-size:12px; }
+  .cfg { display:none; } .cfg.open { display:table-row; }
+  .log { font-family:ui-monospace,Consolas,monospace; font-size:11.5px; max-height:340px; overflow:auto; }
+  .log div { padding:2px 0; border-bottom:1px dashed var(--line); }
+  label.lb { display:block; color:var(--mut); font-size:12px; margin:8px 0 3px; }
+  .chk { display:flex; gap:8px; align-items:center; color:var(--txt); font-size:13px; margin-top:8px; }
+  .toast { position:fixed; bottom:18px; right:18px; background:var(--lime); color:#111; padding:9px 14px; border-radius:8px; font-weight:600; display:none; max-width:420px; }
+  pre.box { white-space:pre-wrap; max-height:260px; overflow:auto; background:#0c0e0d; border:1px solid var(--line); border-radius:6px; padding:8px; font-size:12px; }
+  dialog { background:var(--card); color:var(--txt); border:1px solid var(--line); border-radius:10px; width:min(860px,95vw); }
+  dialog::backdrop { background:rgba(0,0,0,.6); }
+  .tw { overflow-x:auto; } .tw table { min-width:820px; } main > * { min-width:0; } td.row { flex-wrap:nowrap; }
+  #cardPhones th:nth-child(2) { min-width:120px; } #cardPhones th:first-child { width:78px !important; } #cardPhones th:nth-child(4) { width:176px !important; } #cardPhones th:nth-child(5) { width:84px !important; } #cardPhones td input[data-f=mac], #cardPhones td input[data-f=ipei] { font-size:13px; padding:6px 5px; } #cardPhones th:last-child { width:212px !important; } #cardPhones td.row button { padding:6px 9px; }
+  .log .bad { color:var(--red); }
+  #sum { margin-bottom:8px; }
+  details summary { cursor:pointer; margin:10px 0 4px; }
+  @media (max-width:700px){ header { padding:10px 12px; } main { padding:12px 10px; } .card { padding:12px 10px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>OnWork · <b>Banco de provisión</b></h1>
+  <select id="clientSel"></select>
+  <button onclick="newClient()">+ Cliente</button>
+  <button onclick="openImport()">Importar fulla de treball</button>
+  <button id="btnRing" style="display:none" onclick="location.href='/ring'">Asistente RING</button>
+  <button onclick="location.href='/excepcion'" title="Permitir provisionar 1 h desde otra IP">Excepción IP</button>
+  <span id="exc"></span>
+  <span class="sp"></span>
+  <span class="mut" id="sec"></span>
+</header>
+
+<main>
+  <section>
+    <div class="card" id="discover">
+      <h2>Nueva centralita</h2>
+      <label class="lb">Pega la clave API del vPBX: se detecta la centralita y se cargan sus extensiones</label>
+      <div class="row">
+        <input id="dKey" type="password" class="grow" autocomplete="off" placeholder="Clave API">
+      </div>
+      <pre id="dOut" class="box" style="display:none"></pre>
+    </div>
+
+    <div class="card" id="cardClient">
+      <h2>Cliente</h2>
+      <input id="cName" style="width:100%" placeholder="Nombre">
+      <div class="row">
+        <div class="grow"><label class="lb">Dominio SIP</label><input id="cDom" style="width:100%" placeholder="cliente.ringpbx.cat"></div>
+        <div style="width:100px"><label class="lb">Puerto</label><input id="cPort" style="width:100%" value="7060"></div>
+      </div>
+      <label class="lb">Clave API de la centralita (Claves API) — se guarda solo aquí y no se vuelve a mostrar</label>
+      <div class="row">
+        <input id="cKey" type="password" class="grow" autocomplete="off">
+        <input id="tExt" style="width:80px" placeholder="ext">
+        <button onclick="apiTest()">Probar API</button>
+        <button onclick="importVpbx()">Traer extensiones del vPBX</button>
+      </div>
+      <pre id="apiOut" class="box" style="display:none"></pre>
+      <label class="lb">URL de auto‑provisionamiento del vPBX (respaldo si falla la API; opcional)</label>
+      <input id="cUrl" style="width:100%" placeholder="https://...">
+      <label class="chk"><input type="checkbox" id="cAuto"> Asignación automática: cada equipo nuevo que se enchufe va a la siguiente extensión libre de este cliente</label>
+      <label class="chk"><input type="checkbox" id="cBlfAll"> Teclas BLF a todas las demás extensiones del cliente</label>
+      <div class="row" style="align-items:flex-start">
+        <div class="grow"><label class="lb">Marcaciones rápidas (Nombre;Número por línea)</label><textarea id="cSd" rows="5"></textarea></div>
+        <div class="grow"><label class="lb">BLF adicionales (Nombre;Extensión por línea)</label><textarea id="cBlf" rows="5"></textarea></div>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="pri" onclick="saveClient()">Guardar cliente</button>
+        <span class="grow"></span>
+        <button class="danger" onclick="delClient()">Borrar cliente</button>
+      </div>
+    </div>
+
+    <div class="card" id="cardPhones">
+      <h2>Equipos</h2>
+      <div id="sum" class="row"></div>
+      <div class="tw"><table>
+        <thead><tr><th style="width:64px">Ext</th><th>Nombre</th><th style="width:110px">Modelo</th><th style="width:150px">MAC / IPEI</th><th style="width:120px">Base</th><th>Estado</th><th style="width:240px"></th></tr></thead>
+        <tbody id="phones"></tbody>
+      </table></div>
+      <div class="row" style="margin-top:10px">
+        <button onclick="addPhone()">+ Equipo</button>
+        <span class="mut">Los campos se guardan al salir. Bases DECT sin extensión; terminales DECT con IPEI (10 hex, en la etiqueta del terminal).</span>
+        <span class="grow"></span>
+        <button onclick="regenAll()" title="Sobrescribe los cambios manuales de todos los equipos">Regenerar config de todos</button>
+      </div>
+    </div>
+  </section>
+
+  <aside>
+    <div class="card"><h2>Detectados (sin asignar)</h2><div id="detected" class="mut">—</div></div>
+    <div class="card"><h2>Actividad</h2>
+      <label class="chk" style="margin:0 0 6px"><input type="checkbox" id="logMine" checked onchange="loadLog()"> Solo este cliente</label>
+      <div id="log" class="log"></div></div>
+  </aside>
+</main>
+
+<dialog id="dlg">
+  <h3 style="margin-top:0">Importar fulla de treball</h3>
+  <div class="row">
+    <input type="file" id="fFile" accept=".xlsx,.xlsm">
+    <button class="pri" onclick="parseFulla(false)">Leer</button>
+    <button id="btnAi" onclick="parseFulla(true)">Interpretar con IA</button>
+  </div>
+  <input id="fHint" style="width:100%;margin-top:8px" placeholder="Indicaciones para la IA (opcional): p.ej. «BLF de recepción a todos»">
+  <div class="row" style="margin-top:8px">
+    <div class="grow"><label class="lb">Dominio SIP</label><input id="fDom" style="width:100%" placeholder="cliente.ringpbx.cat"></div>
+  </div>
+  <div id="fTab"></div>
+  <details><summary class="mut">Avanzado: editar como JSON</summary>
+  <textarea id="fJson" rows="12" onchange="renderProp()"></textarea></details>
+  <div id="fNotes" class="mut"></div>
+  <div class="row" style="margin-top:8px">
+    <button class="pri" onclick="applyFulla()">Importar</button>
+    <button onclick="dlg.close()">Cancelar</button>
+  </div>
+</dialog>
+<dialog id="dlgAdd" style="width:min(420px,95vw)">
+  <h3 style="margin-top:0">Nuevo equipo</h3>
+  <label class="lb">Modelo</label><select id="aModel" style="width:100%" onchange="aModelCh()"></select>
+  <div id="aExtBox"><label class="lb">Extensión</label><input id="aExt" style="width:100%"></div>
+  <div class="row" style="margin-top:12px"><button class="pri" onclick="addPhoneOk()">Añadir</button><button onclick="dlgAdd.close()">Cancelar</button></div>
+</dialog>
+<dialog id="dlgPv">
+  <h3 style="margin-top:0">Lo que recibirá el equipo</h3>
+  <div class="mut">Contraseñas tapadas. La contraseña SIP se pide al vPBX en el momento de servir.</div>
+  <pre id="pvOut" class="box" style="max-height:60vh"></pre>
+  <button onclick="dlgPv.close()">Cerrar</button>
+</dialog>
+<div class="toast" id="toast"></div>
+
+<script>
+let clients = [], cur = null, phones = [], info = {}, srvOff = 0, prop = null;
+const ago = ts => { if (!ts) return ''; const s = Math.round((Date.now() + srvOff - Date.parse(ts.replace(' ', 'T') + 'Z')) / 1000);
+  if (isNaN(s)) return ts; if (s < 60) return 'hace un momento'; if (s < 3600) return `hace ${Math.floor(s / 60)} min`;
+  if (s < 86400) return `hace ${Math.floor(s / 3600)} h`; return ts.slice(0, 10); };
+const hex = v => (v || '').toLowerCase().replace(/[^0-9a-f]/g, '');
+const $ = s => document.querySelector(s);
+const api = async (url, opt = {}) => {
+  const r = await fetch(url, opt.body instanceof FormData ? opt : { headers: { 'Content-Type': 'application/json' }, ...opt });
+  if (!r.ok) { let t = await r.text(); try { t = JSON.parse(t).detail || t; } catch {} toast('Error: ' + t, true); throw new Error(t); }
+  return r.json();
+};
+const toast = (m, err) => { const t = $('#toast'); t.textContent = m; t.style.background = err ? 'var(--red)' : 'var(--lime)'; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', err ? 6000 : 2500); };
+const fmtId = m => !m ? '' : (m.length === 12 ? m.replace(/(..)(?=.)/g, '$1:').toUpperCase() : m.toUpperCase());
+const esc = s => (s ?? '').toString().replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const lines = (txt, a, b) => txt.split('\n').map(l => l.split(';')).filter(p => p[1]?.trim()).map(p => ({ [a]: p[0].trim(), [b]: p[1].trim() }));
+
+async function loadInfo() {
+  info = await api('/api/info');
+  $('#btnRing').style.display = info.ring ? '' : 'none';
+  if (info.now) srvOff = Date.parse(info.now.replace(' ', 'T') + 'Z') - Date.now();
+  const s = info.seguridad;
+  $('#sec').innerHTML = `Provisión: ${location.origin}${esc(info.prov_path)} · ` +
+    (s.token_provision ? '<span class="pill ok">token</span> ' : '<span class="pill warn">sin token</span> ') +
+    (s.ips_provision.length ? `<span class="pill ok">IPs: ${esc(s.ips_provision.join(', '))}</span> ` : '<span class="pill warn">cualquier IP</span> ') +
+    (s.panel_con_password ? '<span class="pill ok">panel con contraseña</span>' : '<span class="pill warn">panel sin contraseña</span>');
+  // IA opcional: oculta si no hay LLM_PROVIDER en .env
+  $('#btnAi').style.display = info.llm ? '' : 'none'; $('#fHint').style.display = info.llm ? '' : 'none';
+}
+
+async function loadClients(selectId) {
+  clients = await api('/api/clients');
+  const sel = $('#clientSel');
+  sel.innerHTML = clients.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  if (selectId) sel.value = selectId;
+  cur = clients.find(c => c.id == sel.value) || clients[0] || null;
+  renderClient(); await loadPhones();
+}
+$('#clientSel').onchange = () => { cur = clients.find(c => c.id == $('#clientSel').value); renderClient(); loadPhones(); loadLog(); };
+
+async function discover() {
+  const key = $('#dKey').value.trim(); if (!key) return;
+  const o = $('#dOut'); o.style.display = 'block'; o.textContent = 'Consultando la centralita…';
+  try {
+    const r = await api('/api/vpbx/discover', { method: 'POST', body: JSON.stringify({ api_key: key, model: 'T73U' }) });
+    $('#dKey').value = '';
+    o.textContent = `✅ Centralita: ${r.domain || '(sin dominio)'} → cliente «${r.name}»\n${r.extensiones.length} extensiones (${r.creados} equipos nuevos):\n` +
+      r.extensiones.map(e => `  ${e.ext}  ${e.name}${e.type && e.type.toUpperCase() !== 'SIP' ? '  [' + e.type + ', no se provisiona]' : ''}`).join('\n');
+    loadClients(r.id);
+  } catch (e) { o.textContent = '❌ ' + e.message; }
+}
+$('#dKey').addEventListener('paste', () => setTimeout(discover, 50));
+$('#dKey').addEventListener('keydown', e => { if (e.key === 'Enter') discover(); });
+
+function renderClient() {
+  const has = !!cur; $('#cardClient').style.display = has ? '' : 'none'; $('#cardPhones').style.display = has ? '' : 'none';
+  $('#clientSel').style.display = clients.length ? '' : 'none';
+
+  $('#cName').value = cur?.name || ''; $('#cUrl').value = cur?.prov_url || '';
+  $('#cDom').value = cur?.sip_domain || ''; $('#cPort').value = cur?.sip_port || 7060;
+  $('#cAuto').checked = !!cur?.auto_assign; $('#cBlfAll').checked = cur ? !!cur.blf_all : true;
+  $('#cKey').value = '';
+  $('#cKey').placeholder = cur?.has_api_key ? 'Clave guardada (escribe otra para cambiarla, «-» para borrarla)' : (cur?.global_api_key ? 'Sin clave propia (se usará la global)' : 'Sin clave: pega aquí la clave API');
+  $('#cSd').value = (cur?.speed_dials || []).map(s => `${s.label};${s.number}`).join('\n');
+  $('#cBlf').value = (cur?.blf_extra || []).map(s => `${s.name};${s.ext}`).join('\n');
+  $('#apiOut').style.display = 'none';
+}
+function clientBody() {
+  return { name: $('#cName').value.trim(), prov_url: $('#cUrl').value.trim(), sip_domain: $('#cDom').value.trim(),
+    sip_port: parseInt($('#cPort').value) || 7060, api_key: $('#cKey').value.trim() || null,
+    auto_assign: $('#cAuto').checked, blf_all: $('#cBlfAll').checked,
+    speed_dials: lines($('#cSd').value, 'label', 'number'), blf_extra: lines($('#cBlf').value, 'name', 'ext') };
+}
+async function saveClientSilent() { if (cur) await api('/api/clients/' + cur.id, { method: 'PUT', body: JSON.stringify(clientBody()) }); $('#cKey').value = ''; }
+async function saveClient() { await saveClientSilent(); toast('Cliente guardado'); loadClients(cur.id); }
+async function newClient() { const n = prompt('Nombre del cliente'); if (!n) return; const r = await api('/api/clients', { method: 'POST', body: JSON.stringify({ name: n }) }); loadClients(r.id); }
+async function delClient() { if (!cur || !confirm('¿Borrar ' + cur.name + ' y sus equipos?')) return; await api('/api/clients/' + cur.id, { method: 'DELETE' }); loadClients(); }
+async function regenAll() { if (!confirm('Se sobrescribirá la config editada de todos los equipos. ¿Seguir?')) return; await saveClientSilent(); for (const p of phones) await api(`/api/phones/${p.id}/generate`, { method: 'POST' }); toast('Configs regeneradas'); loadClients(cur.id); }
+async function apiTest() {
+  if (!cur) return; const ext = $('#tExt').value.trim() || phones.find(p => p.ext)?.ext; if (!ext) return;
+  await saveClientSilent();
+  const o = $('#apiOut'); o.style.display = 'block'; o.textContent = 'Consultando…';
+  try { const r = await api(`/api/clients/${cur.id}/apitest?ext=${encodeURIComponent(ext)}`); o.textContent = (r.password_encontrada ? '✅ Contraseña SIP encontrada: el banco puede configurar la cuenta.\n\n' : '❌ La API no devuelve la contraseña SIP.\n\n') + JSON.stringify(r, null, 2); }
+  catch (e) { o.textContent = e.message; }
+}
+async function importVpbx() {
+  if (!cur) return; await saveClientSilent();
+  const model = 'T73U';
+  const r = await api(`/api/clients/${cur.id}/import-vpbx?model=${encodeURIComponent(model)}`, { method: 'POST' });
+  toast(`vPBX: ${r.extensiones} extensiones, ${r.creados} equipos nuevos`); loadClients(cur.id);
+}
+
+async function loadPhones() {
+  phones = cur ? await api('/api/phones?client_id=' + cur.id) : [];
+  const open = [...document.querySelectorAll('.cfg.open')].map(e => e.dataset.id);
+  const bases = phones.filter(p => p.kind === 'gs_base');
+  const modelOpts = sel => Object.keys(info.models || {}).concat(sel && !(sel in (info.models || {})) ? [sel] : []).map(m => `<option ${m === sel ? 'selected' : ''}>${esc(m)}</option>`).join('');
+  $('#phones').innerHTML = phones.map(p => `
+    <tr data-id="${p.id}">
+      <td><input value="${esc(p.ext)}" data-f="ext" ${p.kind === 'gs_base' ? 'disabled placeholder="—"' : ''}></td>
+      <td><input value="${esc(p.name)}" data-f="name"></td>
+      <td><select data-f="model">${modelOpts(p.model)}</select></td>
+      <td><input value="${p.kind === 'gs_handset' ? fmtId(p.ipei) : fmtId(p.mac)}" data-f="${p.kind === 'gs_handset' ? 'ipei' : 'mac'}" placeholder="${p.kind === 'gs_handset' ? 'IPEI' : 'MAC'}"></td>
+      <td>${p.kind === 'gs_handset' ? `<select data-f="base_id"><option value="">—</option>${bases.map(b => `<option value="${b.id}" ${b.id === p.base_id ? 'selected' : ''}>${esc(b.name || fmtId(b.mac))}</option>`).join('')}</select>` : '<span class="mut">—</span>'}</td>
+      <td>${statusPill(p)}<div class="mut" title="${esc(p.last_seen || '')}">${ago(p.last_seen)}</div></td>
+      <td class="row">
+        <button onclick="toggleCfg(${p.id})">Config</button>
+        <button onclick="preview(${p.id})" title="Lo que recibirá el equipo">Ver</button>
+        <button onclick="regen(${p.id})" title="Regenerar">↻</button>
+        <button class="danger" onclick="delPhone(${p.id})">✕</button>
+      </td>
+    </tr>
+    <tr class="cfg ${open.includes(String(p.id)) ? 'open' : ''}" data-id="${p.id}"><td colspan="7">
+      <textarea rows="14" id="cfg${p.id}">${esc(p.config)}</textarea>
+      <div class="row" style="margin-top:6px"><button class="pri" onclick="saveCfg(${p.id})">Guardar config</button>
+      <span class="mut">${p.kind === 'yealink' ? 'Se añaden solos: cuenta SIP (API), contraseñas de acceso y reinicio.' : p.kind === 'gs_base' ? 'Líneas «P123 = valor» sobrescriben los valores por defecto.' : 'Se genera solo.'}</span></div>
+    </td></tr>`).join('') || '<tr><td colspan="7" class="mut">Sin equipos. Importa la fulla, trae las extensiones del vPBX o añade uno.</td></tr>';
+  const n = phones.length, okc = phones.filter(p => (p.status || '').startsWith('configurado')).length,
+    bad = phones.filter(p => /^(error|API)/.test(p.status || '')).length,
+    noid = phones.filter(p => p.kind === 'gs_handset' ? !p.ipei : !p.mac).length;
+  $('#sum').innerHTML = n ? `<span class="pill ${okc === n ? 'ok' : ''}">${okc} de ${n} configurados</span>` +
+    (noid ? `<span class="pill warn">${noid} sin MAC/IPEI</span>` : '') + (bad ? `<span class="pill bad">${bad} con error</span>` : '') : '';
+  document.querySelectorAll('#phones [data-f]').forEach(i => i.onchange = () => savePhone(i.closest('tr').dataset.id));
+  renderDetected();
+}
+function statusPill(p) {
+  const s = p.status || 'pendiente';
+  if (s.startsWith('configurado')) return `<span class="pill ok">${esc(s)}</span>`;
+  if (s.startsWith('error') || s.startsWith('API')) return `<span class="pill bad">${esc(s)}</span>`;
+  if (p.kind === 'gs_handset' && !p.ipei) return '<span class="pill warn">Falta IPEI</span>';
+  if (p.kind !== 'gs_handset' && !p.mac) return '<span class="pill warn">Falta MAC</span>';
+  return '<span class="pill">Listo para enchufar</span>';
+}
+async function savePhone(id) {
+  const tr = document.querySelector(`#phones tr[data-id="${id}"]`); const g = f => tr.querySelector(`[data-f="${f}"]`)?.value.trim();
+  const p = phones.find(x => x.id == id);
+  if (g('mac') && hex(g('mac')).length !== 12) { toast('MAC no válida: son 12 caracteres hexadecimales (vale con : - . o espacios)', true); return; }
+  if (g('ipei') && hex(g('ipei')).length !== 10) { toast('IPEI no válido: son 10 caracteres hexadecimales', true); return; }
+  await api('/api/phones/' + id, { method: 'PUT', body: JSON.stringify({ client_id: cur.id, ext: g('ext') ?? '', name: g('name'), model: g('model'),
+    mac: g('mac') ?? p.mac, ipei: g('ipei') ?? p.ipei, base_id: g('base_id') ? +g('base_id') : (g('base_id') === '' ? null : p.base_id) }) });
+  toast('Guardado'); loadPhones();
+}
+function toggleCfg(id) { document.querySelector(`.cfg[data-id="${id}"]`).classList.toggle('open'); }
+async function saveCfg(id) { const p = phones.find(x => x.id === id); await api('/api/phones/' + id, { method: 'PUT', body: JSON.stringify({ client_id: cur.id, ext: p.ext, name: p.name, model: p.model, mac: p.mac, ipei: p.ipei, base_id: p.base_id, config: $('#cfg' + id).value }) }); toast('Config guardada'); loadPhones(); }
+async function regen(id) { if (!confirm('Se perderán los cambios manuales de este equipo. ¿Regenerar?')) return; await saveClientSilent(); await api(`/api/phones/${id}/generate`, { method: 'POST' }); toast('Regenerada'); loadPhones(); }
+async function delPhone(id) { if (!confirm('¿Borrar equipo?')) return; await api('/api/phones/' + id, { method: 'DELETE' }); loadPhones(); }
+function addPhone() { if (!cur) return; $('#aModel').innerHTML = Object.entries(info.models).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join(''); $('#aExt').value = ''; aModelCh(); dlgAdd.showModal(); }
+function aModelCh() { $('#aExtBox').style.display = /^DP75/i.test($('#aModel').value) ? 'none' : ''; }
+async function addPhoneOk() { const model = $('#aModel').value; const ext = /^DP75/i.test(model) ? '' : $('#aExt').value.trim(); await api('/api/phones', { method: 'POST', body: JSON.stringify({ client_id: cur.id, ext, name: '', model }) }); dlgAdd.close(); loadPhones(); }
+async function preview(id) { const r = await api(`/api/phones/${id}/preview`); $('#pvOut').textContent = r.config; dlgPv.showModal(); }
+async function loadExc() { try { const r = await (await fetch('/api/excepcion')).json(); $('#exc').innerHTML = (r.activas || []).map(a => `<span class="pill warn">${esc(a.ip)} · ${a.min} min</span>`).join(' '); } catch {} }
+function renderProp() {
+  try { prop = JSON.parse($('#fJson').value); } catch { $('#fTab').innerHTML = '<span class="mut">JSON no válido</span>'; return; }
+  const c = prop.clients?.[0]; if (!c) { $('#fTab').innerHTML = ''; return; }
+  const tbl = (title, key, cols) => { const rows = c[key] || [];
+    return `<label class="lb">${title} (${rows.length})</label><div class="tw"><table style="min-width:0"><thead><tr>${cols.map(k => `<th>${k[1]}</th>`).join('')}<th style="width:36px"></th></tr></thead><tbody>` +
+      rows.map((r, i) => `<tr>${cols.map(k => `<td><input value="${esc(r[k[0]])}" onchange="propSet('${key}',${i},'${k[0]}',this.value)"></td>`).join('')}<td><button class="danger" onclick="propDel('${key}',${i})">✕</button></td></tr>`).join('') +
+      `</tbody></table></div><button onclick="propAdd('${key}')" style="margin-top:4px">+ Fila</button>`; };
+  $('#fTab').innerHTML = `<label class="lb">Cliente</label><input style="width:100%" value="${esc(c.name)}" onchange="prop.clients[0].name=this.value.trim();propSync()">` +
+    tbl('Equipos', 'phones', [['ext', 'Ext'], ['name', 'Nombre'], ['model', 'Modelo']]) +
+    tbl('Marcaciones rápidas', 'speed_dials', [['label', 'Nombre'], ['number', 'Número']]) +
+    tbl('BLF adicionales', 'blf_extra', [['name', 'Nombre'], ['ext', 'Extensión']]);
+}
+const propSync = () => { $('#fJson').value = JSON.stringify(prop, null, 2); };
+function propSet(k, i, f, v) { prop.clients[0][k][i][f] = v.trim(); propSync(); }
+function propDel(k, i) { prop.clients[0][k].splice(i, 1); propSync(); renderProp(); }
+function propAdd(k) { (prop.clients[0][k] ||= []).push(k === 'phones' ? { ext: '', name: '', model: 'T73U' } : k === 'speed_dials' ? { label: '', number: '' } : { name: '', ext: '' }); propSync(); renderProp(); }
+const dlgAdd = $('#dlgAdd'), dlgPv = $('#dlgPv');
+
+const detSel = {};  // elección manual por equipo detectado: sobrevive al refresco automático
+async function renderDetected() {
+  const d = await api('/api/detected');
+  $('#detected').innerHTML = d.length ? d.map(x => {
+    const isHs = x.mac.length === 10;
+    const free = phones.filter(p => isHs ? (p.kind === 'gs_handset' && !p.ipei) : (p.kind !== 'gs_handset' && !p.mac));
+    return `<div style="padding:6px 0;border-bottom:1px solid var(--line)">
+      <b>${fmtId(x.mac)}</b> <span class="mut">${esc(x.model || '')} · ${esc(x.last_seen)}</span>
+      <div class="row" style="margin-top:4px">
+        <select id="as${x.mac}" onchange="detSel['${x.mac}']=this.value">${free.map(p => `<option value="${p.id}" ${detSel[x.mac] == p.id ? 'selected' : ''}>${esc(p.ext || '(base)')} ${esc(p.name)} · ${esc(p.model)}</option>`).join('') || '<option value="">(nada libre en este cliente)</option>'}</select>
+        <button class="pri" onclick="assign('${x.mac}')">Asignar</button>
+        <button class="danger" onclick="delDet('${x.mac}')">✕</button>
+      </div></div>`; }).join('') : '<span class="mut">Ninguno. Si enchufas un equipo sin asignar aparecerá aquí (los Yealink reintentan cada minuto).</span>';
+}
+async function assign(id) { const pid = $('#as' + id).value; if (!pid) return; delete detSel[id]; await api(`/api/detected/${id}/assign`, { method: 'POST', body: JSON.stringify({ phone_id: +pid }) }); toast('Asignado: se configurará solo en ≤1 min'); loadPhones(); }
+async function delDet(id) { await api('/api/detected/' + id, { method: 'DELETE' }); renderDetected(); }
+
+const dlg = $('#dlg');
+function openImport() { $('#fJson').value = ''; $('#fTab').innerHTML = ''; $('#fNotes').textContent = ''; $('#fDom').value = cur?.sip_domain || ''; dlg.showModal(); }
+async function parseFulla(ai) {
+  const f = $('#fFile').files[0]; if (!f) return toast('Elige el Excel', true);
+  const fd = new FormData(); fd.append('file', f); fd.append('ai', ai ? 'true' : 'false'); fd.append('hint', $('#fHint').value);
+  $('#fNotes').textContent = ai ? 'Interpretando con IA…' : 'Leyendo…';
+  const r = await api('/api/import/fulla', { method: 'POST', body: fd });
+  const prop = { clients: [{ name: r.client || cur?.name || 'Cliente', sip_domain: $('#fDom').value.trim() || undefined,
+    speed_dials: r.speed_dials || [], blf_extra: r.blf_extra || [], phones: (r.phones || []).map(({kind, ...p}) => p) }] };
+  $('#fJson').value = JSON.stringify(prop, null, 2); renderProp();
+  $('#fNotes').innerHTML = (r.notes || []).map(esc).join('<br>') + (r.ambiguous ? `<br><b style="color:var(--amber)">Hay partes ambiguas: revísalas en la propuesta antes de importar.${r.llm_disponible ? ' O prueba «Interpretar con IA».' : ''}</b>` : '');
+}
+async function applyFulla() {
+  let data; try { data = JSON.parse($('#fJson').value); } catch { return toast('JSON no válido', true); }
+  const dom = $('#fDom').value.trim(); if (dom) data.clients.forEach(c => c.sip_domain = c.sip_domain || dom);
+  const r = await api('/api/import', { method: 'POST', body: JSON.stringify(data) });
+  dlg.close(); toast(`Importado: ${r.creados} equipos nuevos`);
+  await loadClients(); const c = clients.find(x => x.name === data.clients[0].name); if (c) loadClients(c.id);
+}
+
+async function loadLog() {
+  const mine = $('#logMine').checked && cur;
+  const l = await api('/api/log?limit=60' + (mine ? '&client_id=' + cur.id : ''));
+  $('#log').innerHTML = l.map(x => { const bad = /error|bloqueado|404|desconocido/i.test(x.result);
+    const who = (x.ext || x.pname) ? `<b>${esc(x.ext || '')} ${esc(x.pname || '')}</b>` : esc(x.path);
+    return `<div title="${esc(x.path)}">${esc(x.ts.slice(11))} ${who} → <span class="${bad ? 'bad' : ''}">${esc(x.result)}</span></div>`; }).join('') || '<span class="mut">Sin peticiones aún.</span>';
+}
+(async () => { await loadInfo(); await loadClients(); loadLog(); loadExc(); })();
+setInterval(loadExc, 30000);
+setInterval(() => { loadLog(); if (!document.querySelector('.cfg.open') && !dlg.open && !document.activeElement.matches('input,textarea,select')) loadPhones(); }, 5000);
+</script>
+<!-- campos-ocultos: quitar este bloque para volver a mostrarlos -->
+<style>.gone{display:none!important}</style>
+<script>
+(function(){
+  const q=s=>document.querySelector(s), g=e=>e&&e.classList.add('gone');
+  const u=q('#cUrl'); if(u){g(u);g(u.previousElementSibling);}
+  const p=q('#cPort'); if(p)g(p.parentElement);
+  g(q('#tExt')); g(q('button[onclick="apiTest()"]'));
+  g(q('button[onclick="newClient()"]'));
+  g(q('#btnAi')); g(q('#fHint'));
+})();
+</script>
+</body>
+</html>

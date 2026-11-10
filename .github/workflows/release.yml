@@ -1,0 +1,57 @@
+name: Release
+
+# Se lanza al subir una etiqueta vX.Y.Z, o a mano indicando la versión.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Versión sin la v (debe coincidir con el fichero VERSION), p. ej. 1.0.0"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Versión
+        id: v
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -e
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then V="$INPUT_VERSION"; else V="${GITHUB_REF_NAME#v}"; fi
+          echo "$V" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "Versión no válida: $V"; exit 1; }
+          [ "$V" = "$(cat VERSION)" ] || { echo "La versión $V no coincide con el fichero VERSION ($(cat VERSION))"; exit 1; }
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+      - name: Prueba de humo
+        run: |
+          python -m pip install -r requirements.txt
+          python tests/smoke.py
+      - name: Empaquetar
+        env:
+          V: ${{ steps.v.outputs.version }}
+        run: |
+          set -e
+          git archive --format=zip --prefix="ring-provisioning-$V/" -o "ring-provisioning-$V.zip" HEAD
+          sha256sum "ring-provisioning-$V.zip" > "ring-provisioning-$V.zip.sha256"
+          unzip -l "ring-provisioning-$V.zip"
+      - name: Publicar
+        env:
+          GH_TOKEN: ${{ github.token }}
+          V: ${{ steps.v.outputs.version }}
+        run: |
+          set -e
+          NOTES="Paquete desplegable de la versión $V. Instalación: descomprime y sigue docs/MANUAL.md (Debian/Ubuntu: sudo ./deploy/install-debian.sh; Docker: docker compose up -d --build; Windows: deploy\\install-windows.ps1)."
+          if gh release view "v$V" >/dev/null 2>&1; then
+            gh release upload "v$V" "ring-provisioning-$V.zip" "ring-provisioning-$V.zip.sha256" --clobber
+          else
+            gh release create "v$V" "ring-provisioning-$V.zip" "ring-provisioning-$V.zip.sha256" --target "$GITHUB_SHA" --title "v$V" --notes "$NOTES"
+          fi

@@ -1,0 +1,30 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Excepción de provisión</title>
+<style>
+:root{--bg:#f4f5f1;--card:#fff;--txt:#161b12;--mut:#5d665a;--line:#d8dccf;--acc:#3f6212;--err:#a12a1f}
+@media (prefers-color-scheme:dark){:root{--bg:#0e110c;--card:#161a12;--txt:#eef2e6;--mut:#98a28e;--line:#2a3024;--acc:#bef264;--err:#ff9d8f}}
+body{background:var(--bg);color:var(--txt);font:15px system-ui,sans-serif;margin:0;padding:24px 16px}
+.c{max-width:520px;margin:auto;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:20px}
+h1{font-size:20px;margin:0 0 6px}p{color:var(--mut);margin:0 0 14px}
+input{font:15px ui-monospace,monospace;width:100%;box-sizing:border-box;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--txt)}
+button{font:600 14px system-ui;padding:9px 14px;border:0;border-radius:6px;background:var(--acc);color:var(--bg);cursor:pointer;margin-top:10px}
+button.q{background:none;color:var(--err);border:1px solid var(--line);margin:0 0 0 8px;padding:4px 10px}
+li{margin:6px 0}#e{color:var(--err)}a{color:var(--acc)}
+</style></head><body><div class="c">
+<h1>Provisionar desde otro sitio</h1>
+<p>Abre la provisión a una IP pública durante 1 hora. Por defecto, la IP desde la que abres esta página: conéctate a la misma red que el banco.</p>
+<label>IP pública <input id="ip" placeholder="detectando…"></label>
+<button onclick="add()">Permitir 1 hora</button>
+<p id="e"></p>
+<h1 style="font-size:16px;margin-top:18px">Activas</h1><ul id="l"><li>—</li></ul>
+<p style="margin-top:16px"><a href="/ui">← Banco de provisión</a> (solo desde la oficina o la LAN)</p>
+</div><script>
+const $=id=>document.getElementById(id);
+function show(d){ if(!$('ip').value) $('ip').value=d.tu_ip;
+  $('l').innerHTML=d.activas.length?d.activas.map(a=>`<li><code>${a.ip}</code> · quedan ${a.min} min<button class="q" onclick="del('${a.ip}')">Quitar</button></li>`).join(''):'<li>Ninguna</li>'; }
+async function call(body){ $('e').textContent='';
+  const r=await fetch('/api/excepcion',body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});
+  const d=await r.json(); if(!r.ok){$('e').textContent=d.detail||'Error';return} show(d); }
+const add=()=>call({ip:$('ip').value.trim()}), del=ip=>call({ip,quitar:true});
+call();
+</script></body></html>

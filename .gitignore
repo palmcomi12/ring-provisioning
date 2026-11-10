@@ -1,0 +1,15 @@
+# Secretos y datos: nunca al repositorio
+.env
+*.env
+!.env.example
+data/
+*.db
+*.db-*
+seed.json
+# Python
+.venv/
+__pycache__/
+*.pyc
+# Paquetes generados
+dist/
+*.zip

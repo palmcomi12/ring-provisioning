@@ -1,0 +1,569 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Asistente RING</title></head>
+<body>
+
+
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: cabecera fina, formulario a la izquierda, resultados con pestañas a la derecha. */
+:root {
+  --bg: #f3f4ef;
+  --panel: #ffffff;
+  --ink: #161b12;
+  --muted: #5d665a;
+  --line: #d8dccf;
+  --accent: #a3e635;
+  --on-accent: #172008;
+  --accent-ink: #3f6212;
+  --warn: #8a5a00;
+  --warn-bg: #fff3d6;
+  --err: #a12a1f;
+  --err-bg: #fde8e4;
+  --code-bg: #12160f;
+  --code-fg: #dfeccf;
+  --code-dim: #8b9a7a;
+  --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e110c; --panel: #161a12; --ink: #eef2e6; --muted: #98a28e; --line: #2a3024;
+    --accent: #a3e635; --on-accent: #172008; --accent-ink: #bef264;
+    --warn: #f2c35a; --warn-bg: #2d2410; --err: #ff9d8f; --err-bg: #331a16;
+    --code-bg: #0a0d08; --code-fg: #dfeccf; --code-dim: #75846a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e110c; --panel: #161a12; --ink: #eef2e6; --muted: #98a28e; --line: #2a3024;
+  --accent: #a3e635; --on-accent: #172008; --accent-ink: #bef264;
+  --warn: #f2c35a; --warn-bg: #2d2410; --err: #ff9d8f; --err-bg: #331a16;
+  --code-bg: #0a0d08; --code-fg: #dfeccf; --code-dim: #75846a;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 14px; line-height: 1.5;
+  padding-block: 0 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1240px; margin: 0 auto; }
+header { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; padding: 22px 0 18px; border-bottom: 2px solid var(--ink); }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: 34px; letter-spacing: .01em; line-height: 1; margin: 0; text-transform: uppercase; }
+h1 span { background: var(--accent); color: var(--on-accent); padding: 0 8px; margin-left: 2px; }
+header p { margin: 0; color: var(--muted); }
+main { display: grid; grid-template-columns: minmax(0, 400px) minmax(0, 1fr); gap: 28px; padding-top: 22px; align-items: start; }
+@media (max-width: 880px) { main { grid-template-columns: minmax(0, 1fr); } }
+form { display: flex; flex-direction: column; gap: 18px; }
+fieldset { border: 1px solid var(--line); background: var(--panel); border-radius: 6px; margin: 0; padding: 14px 16px 16px; min-width: 0; display: grid; gap: 12px; }
+legend { font-family: var(--font-display); font-weight: 600; font-size: 16px; letter-spacing: .08em; text-transform: uppercase; padding: 0 6px; margin-left: -6px; }
+label { display: grid; gap: 4px; font-weight: 500; font-size: 13px; min-width: 0; }
+label small, .hint { font-weight: 400; color: var(--muted); font-size: 12px; }
+input[type="text"], input[type="number"], input[type="password"], textarea, select {
+  font: 14px var(--font-mono); color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 4px;
+  padding: 7px 9px; width: 100%; min-width: 0;
+}
+textarea { min-height: 64px; resize: vertical; }
+input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-visible, .seg label:focus-within { outline: 2px solid var(--accent-ink); outline-offset: 1px; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 420px) { .row2 { grid-template-columns: 1fr; } }
+.seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.seg label { display: block; position: relative; margin: 0; }
+.seg input { position: absolute; opacity: 0; inset: 0; }
+.seg span { display: block; padding: 8px 10px; text-align: center; font-weight: 500; cursor: pointer; background: var(--bg); }
+.seg input:checked + span { background: var(--ink); color: var(--bg); }
+.check { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+.check input { width: 16px; height: 16px; accent-color: var(--accent-ink); }
+.derived { font-family: var(--font-mono); font-size: 12px; background: var(--bg); border: 1px dashed var(--line); border-radius: 4px; padding: 8px 10px; color: var(--muted); display: grid; gap: 2px; }
+.derived b { color: var(--ink); font-weight: 500; }
+.out { min-width: 0; display: grid; gap: 12px; }
+.notice { border-radius: 4px; padding: 9px 12px; font-size: 13px; }
+.notice.err { background: var(--err-bg); color: var(--err); }
+.notice.warn { background: var(--warn-bg); color: var(--warn); }
+.notice ul { margin: 0; padding-left: 18px; }
+.tabs { display: flex; gap: 0; border-bottom: 1px solid var(--line); }
+.tabs button { font: 600 15px var(--font-display); letter-spacing: .08em; text-transform: uppercase; background: none; border: 0; color: var(--muted); padding: 10px 16px; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -1px; }
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.panel-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.panel-head p { margin: 0; color: var(--muted); max-width: 62ch; }
+.copy { font: 600 13px var(--font-body); background: var(--accent); color: var(--on-accent); border: 0; border-radius: 4px; padding: 8px 14px; cursor: pointer; }
+.copy:hover { filter: brightness(.95); }
+.code { margin: 0; background: var(--code-bg); color: var(--code-fg); font: 12.5px/1.55 var(--font-mono); padding: 14px 16px; border-radius: 6px; overflow-x: auto; max-height: 640px; overflow-y: auto; white-space: pre; tab-size: 2; }
+.code .c { color: var(--code-dim); }
+ol.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; counter-reset: s; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); overflow: hidden; }
+ol.steps li { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 12px; padding: 12px 16px; border-top: 1px solid var(--line); }
+ol.steps li:first-child { border-top: 0; }
+.where { font: 600 12px var(--font-display); letter-spacing: .1em; text-transform: uppercase; padding: 3px 0; text-align: center; border-radius: 3px; height: fit-content; margin-top: 2px; }
+.where.hub { background: var(--ink); color: var(--bg); }
+.where.router { background: var(--accent); color: var(--on-accent); }
+ol.steps h3 { margin: 0 0 2px; font-size: 14px; font-weight: 600; }
+ol.steps p { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
+[hidden] { display: none !important; }
+</style>
+<div class="wrap">
+<header>
+  <h1>Asistente <span>RING</span></h1>
+  <p>Túnel OpenVPN de un router nuevo al hub <span data-hub></span>. · <a href="/ui" style="color:inherit">← Banco de provisión</a></p>
+</header>
+<main>
+<form id="f" autocomplete="off" onsubmit="return false">
+  <fieldset>
+    <legend>Cliente</legend>
+    <div class="row2">
+      <label for="label">Sede<small>Nombre en comentarios</small><input type="text" id="label" value="Cliente Sede"></label>
+      <label for="routerName">Nombre del router<small>Identidad</small><input type="text" id="routerName" value="SEDE-CLIENTE-RING"></label>
+    </div>
+    <label for="name">Usuario del túnel<small>Es el secret del hub, sin espacios</small><input type="text" id="name" value="clientesede"></label>
+    <label for="octet">IP del túnel<small>Ejemplo: comprueba en el hub que está libre</small>
+      <div class="row2"><input type="text" id="tunPrefix" value="" disabled aria-hidden="true"><input type="number" id="octet" min="2" max="254" value="86"></div>
+    </label>
+    <div class="derived" id="derived"></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Claves</legend>
+    <label class="check" for="same"><input type="checkbox" id="same" checked> Usar la misma clave en las tres</label>
+    <label for="pwSecret">Clave del túnel<input type="password" id="pwSecret" autocomplete="off"></label>
+    <label for="pwKey" data-more>Passphrase de la .key<input type="password" id="pwKey" autocomplete="off"></label>
+    <label for="pwAdmin" data-more>Clave de admin del router<input type="password" id="pwAdmin" autocomplete="off"></label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Red del cliente</legend>
+    <div class="seg" role="radiogroup" aria-label="Estado del router">
+      <label><input type="radio" name="mode" value="blank" checked><span>En blanco</span></label>
+      <label><input type="radio" name="mode" value="default"><span>Config por defecto</span></label>
+    </div>
+    <p class="hint" id="modeHint" style="margin:0"></p>
+    <div class="row2">
+      <label for="lanNet">Red LAN<small>Puerta de enlace .1</small><input type="text" id="lanNet" value="192.168.132"></label>
+      <label for="wanGw">Router Movistar<small>IP de su LAN</small><input type="text" id="wanGw" value="192.168.1.1"></label>
+    </div>
+    <label class="check" for="dhcp"><input type="checkbox" id="dhcp"> Repartir DHCP en la LAN</label>
+    <div id="dhcpBox" hidden style="display:grid;gap:12px">
+      <div class="row2">
+        <label for="poolFrom">Rango desde .<input type="number" id="poolFrom" value="100"></label>
+        <label for="poolTo">Hasta .<input type="number" id="poolTo" value="199"></label>
+      </div>
+      <label for="leases">Reservas<small>Una por línea: MAC IP comentario</small><textarea id="leases" placeholder="AA:BB:CC:DD:EE:FF 192.168.132.202 Telefon"></textarea></label>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Certificados</legend>
+    <label for="caFile">CA<input type="text" id="caFile" value="cert_export_CA.crt"></label>
+    <label for="crtFile">Cliente<input type="text" id="crtFile" value="cert_export_client.crt"></label>
+    <label for="keyFile">Clave<input type="text" id="keyFile" value="cert_export_client.key"></label>
+  </fieldset>
+</form>
+
+<section class="out" aria-live="polite">
+  <div id="notices"></div>
+  <div class="tabs" role="tablist">
+    <button role="tab" id="t-hub" aria-selected="true" aria-controls="p-hub">Hub</button>
+    <button role="tab" id="t-router" aria-selected="false" aria-controls="p-router">Router</button>
+    <button role="tab" id="t-steps" aria-selected="false" aria-controls="p-steps">Pasos</button>
+  </div>
+  <div id="p-hub" role="tabpanel" aria-labelledby="t-hub" class="out">
+    <div class="panel-head"><p>Pégalo en la terminal de <span data-hub></span>. Crea el usuario y los accesos de Winbox y PRTG.</p><button type="button" class="copy" data-copy="hub">Copiar</button></div>
+    <pre class="code" id="hubOut"></pre>
+  </div>
+  <div id="p-router" role="tabpanel" aria-labelledby="t-router" class="out" hidden>
+    <div class="panel-head"><p>Guárdalo como fichero .rsc, súbelo a Files del router junto con los tres certificados e impórtalo.</p><button type="button" class="copy" data-copy="router">Copiar</button></div>
+    <pre class="code" id="routerOut"></pre>
+  </div>
+  <div id="p-steps" role="tabpanel" aria-labelledby="t-steps" class="out" hidden>
+    <ol class="steps" id="stepsOut"></ol>
+  </div>
+</section>
+</main>
+</div>
+<script>
+/* ---------- Generadores (funciones puras) ---------- */
+var CFG = /*RING_CFG*/{};
+var HUB_NAME = CFG.hubName || 'HUB';
+var HUB_HOST = CFG.hubHost || '';
+var HUB_IP = CFG.hubIp || '';
+var TUN_NET = CFG.tunNet || '';
+var MGMT_IPS = CFG.mgmtIps || [];
+var MONITOR_IP = CFG.monitorIp || '';
+var HUB_ACL = CFG.hubAcl || 'GESTION';
+var HUB_SNMP_CHAIN = CFG.hubSnmpChain || 'dstnat';
+var WINBOX_BASE = CFG.winboxBase || 8300;
+var SNMP_BASE = CFG.snmpBase || 50000;
+
+function rosEsc(s) {
+  return String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\$/g, '\\$').replace(/\?/g, '\\?');
+}
+function isIp(s) {
+  return /^(\d{1,3}\.){3}\d{1,3}$/.test(s) && s.split('.').every(function (n) { return +n <= 255; });
+}
+function parseLeases(text) {
+  var list = [], errors = [];
+  String(text || '').split('\n').forEach(function (raw, i) {
+    var line = raw.trim();
+    if (!line) return;
+    var m = line.split(/\s+/);
+    var mac = (m[0] || '').toUpperCase();
+    var ip = m[1] || '';
+    var comment = m.slice(2).join(' ');
+    if (!/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(mac) || !isIp(ip)) {
+      errors.push('Reserva DHCP, línea ' + (i + 1) + ': usa "MAC IP comentario".');
+    } else {
+      list.push({ mac: mac, ip: ip, comment: comment });
+    }
+  });
+  return { list: list, errors: errors };
+}
+function validate(c) {
+  var e = [];
+  if (!/^[A-Za-z0-9._-]{3,40}$/.test(c.name)) e.push('Usuario del túnel: 3 a 40 caracteres (letras, números, punto, guion).');
+  if (!(c.octet >= 2 && c.octet <= 254)) e.push('IP del túnel: el último número va de 2 a 254.');
+  if (!/^\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(c.lanNet) || c.lanNet.split('.').some(function (n) { return +n > 255; })) {
+    e.push('Red LAN: tres números separados por puntos, por ejemplo 192.168.132.');
+  } else {
+    if (c.lanNet === TUN_NET) e.push('La LAN no puede ser la red del túnel (' + TUN_NET + ').');
+    if (isIp(c.wanGw) && c.wanGw.indexOf(c.lanNet + '.') === 0) e.push('La LAN coincide con la red del router Movistar. Elige otra red.');
+  }
+  if (!isIp(c.wanGw)) e.push('IP del router Movistar no válida.');
+  if (c.dhcp) {
+    if (!(c.poolFrom >= 2 && c.poolTo <= 254 && c.poolFrom < c.poolTo)) e.push('Rango DHCP: de 2 a 254, con el primero menor que el último.');
+  }
+  e = e.concat(parseLeases(c.leases).errors);
+  return e;
+}
+function missing(c) {
+  var m = [];
+  if (!c.pwSecret) m.push('clave del túnel');
+  if (!c.pwKey) m.push('clave de la .key');
+  if (!c.pwAdmin) m.push('clave de admin');
+  return m;
+}
+
+/* ---------- Hub ---------- */
+function hubScript(c) {
+  var ip = TUN_NET + '.' + c.octet;
+  var wp = WINBOX_BASE + c.octet, sp = SNMP_BASE + c.octet;
+  var lab = rosEsc(c.label || c.name);
+  var L = [];
+  L.push('# HUB (' + HUB_NAME + ') - ' + (c.label || c.name));
+  L.push('# 1. Comprobar que la IP del túnel está libre (debe salir vacío)');
+  L.push('/ppp secret print where remote-address=' + ip);
+  L.push('');
+  L.push('# 2. Usuario del túnel y NAT de Winbox y PRTG');
+  L.push('/ppp secret add name="' + rosEsc(c.name) + '" password="' + rosEsc(c.pwSecret || 'CAMBIAR') + '" local-address=' + TUN_NET + '.1 remote-address=' + ip + ' service=ovpn comment="' + lab + '"');
+  L.push('/ip firewall nat add chain=dstnat action=dst-nat protocol=tcp dst-port=' + wp + ' src-address-list=' + HUB_ACL + ' to-addresses=' + ip + ' to-ports=8291 comment="ACCES ROUTER - ' + lab + '"');
+  L.push('/ip firewall nat add chain=' + HUB_SNMP_CHAIN + ' action=dst-nat protocol=udp dst-port=' + sp + ' to-addresses=' + ip + ' to-ports=161');
+  L.push('');
+  L.push('# 3. Verificar que se ha creado');
+  L.push('/ppp secret print where name="' + rosEsc(c.name) + '"');
+  L.push('/ip firewall nat print where to-addresses=' + ip);
+  L.push('');
+  L.push('# 4. Cuando el router cliente conecte');
+  L.push('/ppp active print where name="' + rosEsc(c.name) + '"');
+  L.push('/ping ' + ip + ' count=3');
+  L.push('');
+  L.push('# Deshacer (si te equivocas)');
+  L.push('# /ppp secret remove [find name="' + rosEsc(c.name) + '"]');
+  L.push('# /ip firewall nat remove [find to-addresses=' + ip + ']');
+  return L.join('\n');
+}
+
+/* ---------- Router ---------- */
+function routerScript(c) {
+  var L = [];
+  var p = function (s) { L.push(s === undefined ? '' : s); };
+  var gw = c.lanNet + '.1';
+  var wl = MGMT_IPS.map(function (x) { return x.indexOf('/') < 0 ? x + '/32' : x; }).concat([c.lanNet + '.0/24']).join(',') + (c.mode === 'default' ? ',192.168.88.0/24' : '');
+  var leases = parseLeases(c.leases).list;
+  var ipPh = c.lanNet + '.10';
+  var def = c.mode === 'default';
+  var ovpnName = (c.crtFile || 'cert_export_client.crt') + '_0';
+
+  p('# ============================================================');
+  p('# ' + (c.label || c.name) + ' - RouterOS 7 - túnel RING (' + TUN_NET + '.' + c.octet + ')');
+  p('# LAN ' + c.lanNet + '.0/24 ' + (c.dhcp ? 'con DHCP' : 'sin DHCP (IP estática)'));
+  if (def) {
+    p('# Equipo con la config POR DEFECTO (bridge + 192.168.88.1), ether1 SIN conectar.');
+    p('# Script repetible: borra lo que crea antes de crearlo.');
+  } else {
+    p('# Equipo en BLANCO: /system reset-configuration no-defaults=yes skip-backup=yes');
+    p('# (entrar por MAC-Winbox, /interface bridge print debe salir vacío)');
+  }
+  p('# Subir a Files: este .rsc + ' + c.caFile + ', ' + c.crtFile + ', ' + c.keyFile);
+  p('# /import file-name=NOMBRE.rsc');
+  if (def) p('# El último bloque cambia la IP de la LAN y se corta la sesión: PC en ' + c.lanNet + '.2/24 y entrar a ' + gw);
+  p('# Cable final: ether1 -> LAN del router Movistar | ether2-5 -> switch/equipos');
+  p('# ============================================================');
+  p();
+
+  if (def) {
+    p('# ---------- Limpieza previa (para poder repetir el import) ----------');
+    p('/system ntp client servers remove [ find ]');
+    p('/ip firewall address-list remove [ find list=RING ]');
+    p('/ip firewall filter remove [ find comment=WINBOX ]');
+    p('/ip firewall filter remove [ find comment=PRTG ]');
+    p('/ip firewall nat remove [ find comment~"Acces Telefons" ]');
+    p('/ip firewall mangle remove [ find where action=change-mss ]');
+    p('/ip route remove [ find comment~"HUB RING" ]');
+    p('/interface list member remove [ find where interface=ovpn-RING ]');
+    p('/interface ovpn-client remove [ find name=ovpn-RING ]');
+    p('/certificate remove [ find where name~"cert_export" ]');
+    p();
+  }
+
+  p('# ---------- Sistema ----------');
+  p('/system identity set name=' + c.routerName);
+  p('/system clock set time-zone-name=Europe/Madrid');
+  p('/system ntp client set enabled=yes');
+  p('/system ntp client servers add address=es.pool.ntp.org');
+  p('/user set admin password="' + rosEsc(c.pwAdmin || 'CAMBIAR') + '"');
+  p('/ipv6 settings set disable-ipv6=yes');
+  p();
+
+  p('# ---------- WAN: LAN del router Movistar (DHCP) ----------');
+  p('/interface ethernet set [ find default-name=ether1 ] name=ether1-WAN');
+  if (def) {
+    p('/ip dhcp-client set [ find ] default-route-distance=10 use-peer-dns=no comment=WAN-MOVISTAR');
+  } else {
+    p('/ip dhcp-client add interface=ether1-WAN default-route-distance=10 use-peer-dns=no comment=WAN-MOVISTAR');
+  }
+  p('/ip dns set allow-remote-requests=yes servers=1.1.1.1,8.8.8.8');
+  if (def) p('/ip dns static remove [ find where dynamic=no ]');
+  p();
+
+  if (!def) {
+    p('# ---------- Bridge LAN ----------');
+    p('/interface bridge add name=bridge comment=LAN-TELEFONS protocol-mode=rstp');
+    p('/interface bridge port');
+    ['ether2', 'ether3', 'ether4', 'ether5'].forEach(function (e) { p('add bridge=bridge interface=' + e); });
+    p('/ip address add address=' + gw + '/24 interface=bridge comment=LAN-TELEFONS');
+    if (c.dhcp) {
+      p('/ip pool add name=dhcp_pool1 ranges=' + c.lanNet + '.' + c.poolFrom + '-' + c.lanNet + '.' + c.poolTo);
+      p('/ip dhcp-server add name=dhcp1 interface=bridge address-pool=dhcp_pool1 lease-time=1d');
+      p('/ip dhcp-server network add address=' + c.lanNet + '.0/24 gateway=' + gw + ' dns-server=' + gw);
+      if (leases.length) {
+        p('/ip dhcp-server lease');
+        leases.forEach(function (l) { p('add server=dhcp1 address=' + l.ip + ' mac-address=' + l.mac + (l.comment ? ' comment="' + rosEsc(l.comment) + '"' : '')); });
+      }
+    }
+    p('/interface list add name=WAN');
+    p('/interface list add name=LAN');
+    p('/interface list member');
+    p('add list=LAN interface=bridge');
+    p('add list=WAN interface=ether1-WAN');
+    p();
+  }
+
+  p('# ---------- Firewall (igual que el cliente de ejemplo) ----------');
+  p('/ip firewall address-list');
+  MGMT_IPS.forEach(function (x) { p('add address=' + x + ' list=RING'); });
+  p('/ip firewall filter');
+  if (def) {
+    p('add chain=input action=accept protocol=tcp dst-port=8291 in-interface-list=WAN src-address-list=RING comment=WINBOX place-before=0');
+    if (MONITOR_IP) p('add chain=input action=accept protocol=udp dst-port=160,161 in-interface-list=WAN src-address=' + MONITOR_IP + ' comment=PRTG place-before=0');
+  } else {
+    p('add chain=input action=accept protocol=tcp dst-port=8291 in-interface-list=WAN src-address-list=RING comment=WINBOX');
+    if (MONITOR_IP) p('add chain=input action=accept protocol=udp dst-port=160,161 in-interface-list=WAN src-address=' + MONITOR_IP + ' comment=PRTG');
+    p('add chain=input action=accept connection-state=established,related,untracked');
+    p('add chain=input action=drop connection-state=invalid');
+    p('add chain=input action=accept protocol=icmp');
+    p('add chain=input action=accept dst-address=127.0.0.1');
+    p('add chain=input action=drop in-interface-list=!LAN');
+    p('add chain=forward action=fasttrack-connection connection-state=established,related');
+    p('add chain=forward action=accept connection-state=established,related,untracked');
+    p('add chain=forward action=drop connection-state=invalid');
+    p('add chain=forward action=drop connection-nat-state=!dstnat connection-state=new in-interface-list=WAN');
+  }
+  if (!def) {
+    p('/ip firewall nat');
+    p('add chain=srcnat action=masquerade out-interface-list=WAN');
+    p('add chain=dstnat action=dst-nat protocol=tcp dst-port=80,443 in-interface-list=WAN to-addresses=' + ipPh + ' disabled=yes comment="Acces Telefons (editar IP del telefono y activar)"');
+  } else {
+    p('/ip firewall nat add chain=dstnat action=dst-nat protocol=tcp dst-port=80,443 in-interface-list=WAN to-addresses=' + ipPh + ' disabled=yes comment="Acces Telefons (editar IP del telefono y activar)"');
+  }
+  p('/ip firewall mangle add chain=forward action=change-mss new-mss=clamp-to-pmtu protocol=tcp tcp-flags=syn out-interface-list=WAN passthrough=yes');
+  p('/ip firewall service-port');
+  p('set ftp disabled=yes');
+  p('set tftp disabled=yes');
+  p('set h323 disabled=yes');
+  p('set sip disabled=yes');
+  p();
+
+  p('# ---------- Servicios ----------');
+  p('/ip neighbor discovery-settings set discover-interface-list=LAN');
+  p('/tool mac-server set allowed-interface-list=LAN');
+  p('/tool mac-server mac-winbox set allowed-interface-list=LAN');
+  p('/ip service');
+  ['telnet', 'ftp', 'www', 'ssh', 'api', 'api-ssl'].forEach(function (s) { p('set ' + s + ' disabled=yes'); });
+  p('set winbox available-from=' + wl);
+  p('/snmp set enabled=yes');
+  p();
+
+  p('# ---------- Túnel OVPN RING ----------');
+  p('/certificate import file-name=' + c.caFile + ' passphrase=""');
+  p('/certificate import file-name=' + c.crtFile + ' passphrase=""');
+  p('/certificate import file-name=' + c.keyFile + ' passphrase="' + rosEsc(c.pwKey || 'CAMBIAR') + '"');
+  p('/interface ovpn-client add name=ovpn-RING connect-to=' + HUB_HOST + ' port=1194 protocol=tcp mode=ip user="' + rosEsc(c.name) + '" password="' + rosEsc(c.pwSecret || 'CAMBIAR') + '" certificate=' + ovpnName + ' auth=md5 cipher=blowfish128 verify-server-certificate=yes add-default-route=yes use-peer-dns=no disabled=no');
+  p('/interface list member add list=WAN interface=ovpn-RING');
+  p('/ip route add dst-address=' + HUB_IP + '/32 gateway=' + c.wanGw + ' distance=1 comment="HUB RING por router Movistar"');
+
+  if (def) {
+    p();
+    p('# ---------- LAN (ULTIMO: corta la sesión) ----------');
+    p('/interface bridge set [ find name=bridge ] comment=LAN-TELEFONS');
+    p('/ip dhcp-server remove [ find ]');
+    p('/ip dhcp-server network remove [ find ]');
+    p('/ip pool remove [ find ]');
+    if (c.dhcp) {
+      p('/ip pool add name=dhcp_pool1 ranges=' + c.lanNet + '.' + c.poolFrom + '-' + c.lanNet + '.' + c.poolTo);
+      p('/ip dhcp-server add name=dhcp1 interface=bridge address-pool=dhcp_pool1 lease-time=1d');
+      p('/ip dhcp-server network add address=' + c.lanNet + '.0/24 gateway=' + gw + ' dns-server=' + gw);
+      leases.forEach(function (l) { p('/ip dhcp-server lease add server=dhcp1 address=' + l.ip + ' mac-address=' + l.mac + (l.comment ? ' comment="' + rosEsc(l.comment) + '"' : '')); });
+    }
+    p('/ip address set [ find where interface=bridge ] address=' + gw + '/24 comment=LAN-TELEFONS');
+  }
+  return L.join('\n');
+}
+
+/* ---------- Pasos ---------- */
+function stepsList(c) {
+  var ip = TUN_NET + '.' + c.octet;
+  var def = c.mode === 'default';
+  var gw = c.lanNet + '.1';
+  var s = [];
+  s.push({ where: 'Hub', title: 'Comprobar la IP del túnel', body: 'Pega el primer bloque del hub. El comando de comprobación debe salir vacío; si muestra algo, la ' + ip + ' ya está en uso y hay que elegir otra.' });
+  s.push({ where: 'Hub', title: 'Crear el usuario y los NAT', body: 'Pega el segundo bloque: crea el usuario ' + c.name + ' y los accesos Winbox (puerto ' + (WINBOX_BASE + c.octet) + ') y PRTG (puerto ' + (SNMP_BASE + c.octet) + '). El certificado no se toca: todos los clientes usan el mismo.' });
+  s.push({ where: 'Hub', title: 'Descargar los certificados', body: 'Desde Files del hub baja ' + c.caFile + ', ' + c.crtFile + ' y ' + c.keyFile + '. Si no recuerdas la clave de la .key, reexporta el certificado client con una clave conocida y un nombre de fichero nuevo.' });
+  if (def) {
+    s.push({ where: 'Router', title: 'Entrar por 192.168.88.1', body: 'Con ether1 sin conectar y el PC en un puerto ether2 a ether5. Si no entra, reset con el botón y vuelve a probar.' });
+  } else {
+    s.push({ where: 'Router', title: 'Resetear en blanco', body: 'Ejecuta /system reset-configuration no-defaults=yes skip-backup=yes. Entra por MAC-Winbox con admin y clave vacía, y comprueba que /interface bridge print sale vacío.' });
+  }
+  s.push({ where: 'Router', title: 'Subir los ficheros e importar', body: 'Sube a Files el .rsc y los tres certificados. Importa con /import file-name=NOMBRE.rsc.' + (def ? ' Al final se corta la sesión: pon el PC en ' + c.lanNet + '.2/24 sin gateway y entra a ' + gw + '. Después quita 192.168.88.0/24 de la lista de Winbox: /ip service set winbox available-from=' + MGMT_IPS.map(function (x) { return x.indexOf('/') < 0 ? x + '/32' : x; }).concat([c.lanNet + '.0/24']).join(',') : '') });
+  s.push({ where: 'Router', title: 'Comprobar certificados', body: '/certificate print debe mostrar la CA con T y ' + c.crtFile + '_0 con K y T. Si el cliente OVPN dice "missing key" o "private key is invalid", la clave de la .key no es la correcta o el cliente apunta a un certificado borrado.' });
+  s.push({ where: 'Router', title: 'Conectar la WAN', body: 'Conecta ether1 a la LAN del router Movistar. /ip dhcp-client print debe estar en bound y /ping ' + HUB_IP + ' debe responder. Si el router Movistar no es ' + c.wanGw + ', corrige: /ip route set [find comment~"HUB"] gateway=IP_REAL' });
+  s.push({ where: 'Router', title: 'Levantar el túnel', body: '/interface ovpn-client print debe mostrar R y /ping ' + TUN_NET + '.1 count=3 debe responder.' });
+  s.push({ where: 'Hub', title: 'Verificar desde el hub', body: '/ppp active print where name=' + c.name + ' debe mostrar ' + ip + '. Prueba Winbox a ' + HUB_IP + ':' + (WINBOX_BASE + c.octet) + ' desde una IP de ' + HUB_ACL + ' y SNMP al puerto ' + (SNMP_BASE + c.octet) + '/udp.' });
+  s.push({ where: 'Router', title: 'Teléfonos', body: 'Para entrar a la web de un teléfono edita la regla "Acces Telefons" con su IP y actívala. En el hub, la regla de 80/443 solo apunta a un cliente a la vez.' });
+  return s;
+}
+/* ---------- Interfaz ---------- */
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var out = { hub: '', router: '' };
+
+  function readCfg() {
+    var same = $('same').checked;
+    var pw = $('pwSecret').value;
+    return {
+      name: $('name').value.trim(),
+      label: $('label').value.trim(),
+      routerName: $('routerName').value.trim() || 'ROUTER-RING',
+      octet: parseInt($('octet').value, 10),
+      pwSecret: pw,
+      pwKey: same ? pw : $('pwKey').value,
+      pwAdmin: same ? pw : $('pwAdmin').value,
+      lanNet: $('lanNet').value.trim(),
+      wanGw: $('wanGw').value.trim(),
+      mode: document.querySelector('input[name="mode"]:checked').value,
+      dhcp: $('dhcp').checked,
+      poolFrom: parseInt($('poolFrom').value, 10),
+      poolTo: parseInt($('poolTo').value, 10),
+      leases: $('leases').value,
+      caFile: $('caFile').value.trim(),
+      crtFile: $('crtFile').value.trim(),
+      keyFile: $('keyFile').value.trim()
+    };
+  }
+
+  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function colorize(text) {
+    return text.split('\n').map(function (l) {
+      return /^\s*#/.test(l) ? '<span class="c">' + esc(l) + '</span>' : esc(l);
+    }).join('\n');
+  }
+
+  function render() {
+    var c = readCfg();
+    document.querySelectorAll('[data-more]').forEach(function (el) { el.hidden = c.pwSecret !== undefined && $('same').checked; });
+    $('dhcpBox').hidden = !c.dhcp;
+    $('modeHint').textContent = c.mode === 'blank'
+      ? 'Tras /system reset-configuration no-defaults=yes, entrando por MAC-Winbox.'
+      : 'Tras el reset con botón, entrando por 192.168.88.1. El script se puede repetir.';
+
+    var errs = validate(c);
+    var notices = $('notices');
+    notices.innerHTML = '';
+    if (errs.length) {
+      var d = document.createElement('div');
+      d.className = 'notice err';
+      d.innerHTML = '<ul>' + errs.map(function (e) { return '<li>' + esc(e) + '</li>'; }).join('') + '</ul>';
+      notices.appendChild(d);
+    } else {
+      var m = missing(c);
+      if (m.length) {
+        var w = document.createElement('div');
+        w.className = 'notice warn';
+        w.textContent = 'Falta: ' + m.join(', ') + '. Aparece como CAMBIAR en los comandos.';
+        notices.appendChild(w);
+      }
+    }
+    var ok = errs.length === 0;
+    $('derived').innerHTML = ok
+      ? '<span>IP del túnel <b>' + TUN_NET + '.' + c.octet + '</b></span><span>Winbox desde el hub <b>' + HUB_IP + ':' + (WINBOX_BASE + c.octet) + '</b></span><span>SNMP / PRTG <b>' + HUB_IP + ':' + (SNMP_BASE + c.octet) + '/udp</b></span>'
+      : '<span>Revisa los datos marcados arriba.</span>';
+    if (ok) {
+      out.hub = hubScript(c);
+      out.router = routerScript(c);
+      $('hubOut').innerHTML = colorize(out.hub);
+      $('routerOut').innerHTML = colorize(out.router);
+      $('stepsOut').innerHTML = stepsList(c).map(function (s) {
+        return '<li><span class="where ' + (s.where === 'Hub' ? 'hub' : 'router') + '">' + s.where + '</span><div><h3>' + esc(s.title) + '</h3><p>' + esc(s.body) + '</p></div></li>';
+      }).join('');
+    }
+    document.querySelectorAll('.copy').forEach(function (b) { b.disabled = !ok; b.style.opacity = ok ? 1 : .4; });
+  }
+
+  document.querySelectorAll('#f input, #f textarea').forEach(function (el) {
+    el.addEventListener('input', render);
+    el.addEventListener('change', render);
+  });
+
+  ['hub', 'router', 'steps'].forEach(function (k) {
+    $('t-' + k).addEventListener('click', function () {
+      ['hub', 'router', 'steps'].forEach(function (j) {
+        $('t-' + j).setAttribute('aria-selected', j === k ? 'true' : 'false');
+        $('p-' + j).hidden = j !== k;
+      });
+    });
+  });
+
+  document.querySelectorAll('.copy').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var key = b.getAttribute('data-copy');
+      var pre = $(key + 'Out');
+      var done = function () { var t = b.textContent; b.textContent = 'Copiado'; setTimeout(function () { b.textContent = t; }, 1400); };
+      var fallback = function () {
+        var r = document.createRange(); r.selectNodeContents(pre);
+        var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+        b.textContent = 'Seleccionado: Ctrl+C';
+        setTimeout(function () { b.textContent = 'Copiar'; }, 2200);
+      };
+      try {
+        navigator.clipboard.writeText(out[key]).then(done, fallback);
+      } catch (e) { fallback(); }
+    });
+  });
+
+  document.querySelectorAll('[data-hub]').forEach(function (e) { e.textContent = HUB_NAME; });
+  if ($('tunPrefix')) $('tunPrefix').value = TUN_NET + '.';
+  render();
+})();
+</script>
+
+
+</body></html>

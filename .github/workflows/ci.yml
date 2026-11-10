@@ -1,0 +1,148 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Prueba de humo (${{ matrix.os }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.10", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install -r requirements.txt
+      - run: python tests/smoke.py
+        env:
+          PYTHONUTF8: "1"
+
+  instalador-ubuntu:
+    name: Instalador en Ubuntu con systemd
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instalar
+        run: |
+          set -o pipefail
+          sudo ./deploy/install-debian.sh --port 18066 | sed -E 's/(Contraseña del panel: ).*/\1***/; s#(/p/)[0-9a-f]{32}#\1***#'
+      - name: Comprobar el servicio
+        run: |
+          set -e
+          sleep 3
+          systemctl is-active ring-provisioning
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18066/ui)" = 401
+          TK="$(sudo sed -n 's/^PROV_TOKEN=//p' /opt/ring-provisioning/.env)"
+          echo "::add-mask::$TK"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -A 'Yealink SIP-T33G 1 00:15:65:11:22:33' "http://127.0.0.1:18066/p/$TK/001565112233.cfg")" = 200
+          test "$(curl -s -o /dev/null -w '%{http_code}' -A 'Yealink SIP-T33G 1 00:15:65:11:22:33' http://127.0.0.1:18066/001565112233.cfg)" = 404
+      - name: Repetir (actualización) y comprobar que conserva datos
+        run: |
+          set -e
+          sudo ./deploy/install-debian.sh | tail -n 6 | sed -E 's#(/p/)[0-9a-f]{32}#\1***#'
+          sleep 3
+          systemctl is-active ring-provisioning
+          sudo test -s /opt/ring-provisioning/data/prov.db
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18066/ui)" = 401
+      - name: Registro del servicio
+        if: always()
+        run: sudo journalctl -u ring-provisioning --no-pager -n 30 | sed -E 's#(/p/)[0-9a-f]{32}#\1***#' || true
+
+  instalador-debian12:
+    name: Instalador en Debian 12 (contenedor, sin systemd)
+    runs-on: ubuntu-latest
+    container: debian:12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instalar
+        shell: bash
+        run: |
+          set -o pipefail
+          ./deploy/install-debian.sh --port 18066 | sed -E 's/(Contraseña del panel: ).*/\1***/; s#(/p/)[0-9a-f]{32}#\1***#'
+      - name: Arrancar a mano y probar
+        run: |
+          set -e
+          cd /opt/ring-provisioning
+          python3 --version
+          (setpriv --reuid ringprov --regid ringprov --clear-groups env ENV_FILE=/opt/ring-provisioning/.env .venv/bin/python run.py > /tmp/run.log 2>&1 &)
+          sleep 5
+          .venv/bin/python - <<'PY'
+          import urllib.request, urllib.error
+          try:
+              urllib.request.urlopen("http://127.0.0.1:18066/ui", timeout=5)
+              raise SystemExit("el panel debería pedir contraseña")
+          except urllib.error.HTTPError as e:
+              assert e.code == 401, e.code
+          print("ok: el panel responde 401 sin contraseña")
+          PY
+          cd "$GITHUB_WORKSPACE" && /opt/ring-provisioning/.venv/bin/python tests/smoke.py
+
+  instalador-windows:
+    name: Instalador en Windows Server
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Instalar
+        shell: powershell
+        run: |
+          .\deploy\install-windows.ps1 -Port 18066 | ForEach-Object { $_ -replace '(del panel:\s+).*', '$1***' -replace '(/p/)[0-9a-f]{32}', '$1***' }
+      - name: Comprobar la tarea y el servicio
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Start-Sleep -Seconds 3
+          (Get-ScheduledTask -TaskName RingProvisioning).State
+          $code = 0
+          try { $code = [int](Invoke-WebRequest -UseBasicParsing -Uri http://127.0.0.1:18066/ui -TimeoutSec 10).StatusCode }
+          catch { $code = [int]$_.Exception.Response.StatusCode }
+          if ($code -ne 401) { throw "El panel devuelve $code y se esperaba 401" }
+          $tk = (Select-String -Path .env -Pattern '^PROV_TOKEN=(.+)$').Matches[0].Groups[1].Value
+          Write-Host "::add-mask::$tk"
+          $r = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:18066/p/$tk/001565112233.cfg" -UserAgent 'Yealink SIP-T33G 1 00:15:65:11:22:33' -TimeoutSec 10
+          if ([int]$r.StatusCode -ne 200) { throw 'La provisión no responde 200' }
+          if (-not (Test-Path data\prov.db)) { throw 'No se ha creado data\prov.db' }
+          if (-not (Get-NetFirewallRule -DisplayName 'Ring provisioning' -ErrorAction SilentlyContinue)) { throw 'Falta la regla del firewall' }
+          Write-Host 'ok'
+      - name: Desinstalar
+        shell: powershell
+        run: |
+          .\deploy\install-windows.ps1 -Uninstall
+          if (Get-ScheduledTask -TaskName RingProvisioning -ErrorAction SilentlyContinue) { throw 'La tarea sigue existiendo' }
+
+  docker:
+    name: Docker Compose
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construir y arrancar
+        run: |
+          python3 deploy/init_env.py .env --port 18066 > /dev/null
+          docker compose up -d --build
+      - name: Probar
+        run: |
+          set -e
+          sleep 5
+          docker compose ps
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18066/ui)" = 401
+          TK="$(sed -n 's/^PROV_TOKEN=//p' .env)"
+          echo "::add-mask::$TK"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -A 'Yealink SIP-T33G 1 00:15:65:11:22:33' "http://127.0.0.1:18066/p/$TK/001565112233.cfg")" = 200
+          sudo test -s data/prov.db

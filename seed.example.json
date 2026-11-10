@@ -1,0 +1,16 @@
+{
+  "clients": [
+    {
+      "name": "CLIENTE DE EJEMPLO, S.L.",
+      "sip_domain": "cliente.ringpbx.cat",
+      "sip_port": 7060,
+      "speed_dials": [
+        {"label": "Nombre Apellido", "number": "600000000"}
+      ],
+      "phones": [
+        {"ext": "2001", "name": "Recepción", "model": "T73U"},
+        {"ext": "2002", "name": "Despacho", "model": "T33G"}
+      ]
+    }
+  ]
+}

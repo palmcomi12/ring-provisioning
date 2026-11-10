@@ -1,0 +1,14 @@
+# Arranque: cp .env.example .env  (y rellenarlo)  ->  docker compose up -d --build
+services:
+  ring-provisioning:
+    build: .
+    image: ring-provisioning:local
+    container_name: ring-provisioning
+    restart: unless-stopped
+    ports:
+      # BIND=127.0.0.1 si delante hay un proxy inverso en la misma máquina
+      - "${BIND:-0.0.0.0}:${PORT:-8066}:8066"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/data
